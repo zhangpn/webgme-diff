@@ -1,0 +1,13 @@
+{
+  "components": {
+    "plugins": {
+      "DisplayGraphDiff": {
+        "src": "src/plugins/DisplayGraphDiff",
+        "test": "test/plugins/DisplayGraphDiff"
+      }
+    }
+  },
+  "dependencies": {
+    "plugins": {}
+  }
+}
