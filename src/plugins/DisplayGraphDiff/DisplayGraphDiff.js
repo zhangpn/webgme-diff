@@ -22,6 +22,7 @@ define([
      */
     var DisplayGraphDiff = function () {
         // Call base class' constructor.
+        this.nodeDataByPath = {};
         PluginBase.call(this);
     };
 
@@ -51,6 +52,8 @@ define([
         //var self = this,
             //branchesResponse = $.ajax({url: "api/projects/" + self.projectId.replace("+", "/") + "/branches", async: false}).responseJSON,
             //branches = branchesResponse ? Object.keys(branchesResponse) : [];
+
+        // todo: in the plugin window show a list of available branches
         return [
             {
                 name: 'branch1Name',
@@ -90,14 +93,12 @@ define([
 
 
         // Using the logger.
-        self.logger.debug('This is a debug message.');
-        self.logger.info('This is an info message.');
-        self.logger.warn('This is a warning message.');
-        self.logger.error('This is an error message.');
+        //self.logger.debug('This is a debug message.');
+        //self.logger.info('This is an info message.');
+        //self.logger.warn('This is a warning message.');
+        //self.logger.error('This is an error message.');
 
         // Using the coreAPI to make changes.
-
-        // todo: in the plugin window show a list of available branches
 
         // todo: allow user to select 2 branches to compare
         self.currentConfig = self.getCurrentConfig();
@@ -105,31 +106,130 @@ define([
             b2 = self.currentConfig.branch2Name,
             url = "/api/projects/" + self.projectId.replace("+", "/") + "/compare/" + b1 + "..." + b2;
 
-        var result = $.ajax({url: url, async: false}).responseJSON;
+        // get the diff json between selected branch1 and branch2
+        var diff = $.ajax({url: url, async: false}).responseJSON;
 
+        // process this diff
+        self._processDiffObject(diff);
+
+        // todo: redirect to graph view
+        //window.location.href = window.location.href.replace("ModelEditor", "GraphViz");
+        //window.location.href = window.location.href.replace("Crosscut", "GraphViz");
+        //window.location.href = window.location.href.replace("SetEditor", "GraphViz");
 
 
         // todo: when plugin runs, it updates the color attributes of graph view of the two branches
 
         // todo: when two versions are the same, use default colors; when different, use other colors
 
-        nodeObject = self.activeNode;
 
-        self.core.setAttribute(nodeObject, 'name', 'My new obj');
-        self.core.setRegistry(nodeObject, 'position', {x: 70, y: 70});
+        // todo: find id with special char use .find('[id="' + "/4" + '"]')  use [id^=] finds by partial id
 
+        var graphNodes = $('g.node'),
+            node,
+            modifiedNode;
 
-        // This will save the changes. If you don't want to save;
-        // exclude self.save and call callback directly from this scope.
-        self.save('DisplayGraphDiff updated model.', function (err) {
-            if (err) {
-                callback(err, self.result);
-                return;
+        for (node in self.nodeDataByPath) {
+            if (self.nodeDataByPath.hasOwnProperty(node)) {
+                modifiedNode = graphNodes.find('[id="' + node + '"]');
+                if (modifiedNode) {
+                    self._modifiyNode(modifiedNode);
+                }
             }
-            self.result.setSuccess(true);
-            callback(null, self.result);
-        });
+        }
 
+
+
+        nodeObject = self.activeNode;
+        //
+        //self.core.setAttribute(nodeObject, 'name', 'My new obj');
+        //self.core.setRegistry(nodeObject, 'position', {x: 70, y: 70});
+
+        self.result.setSuccess(true);
+        callback(null, self.result);
+
+    };
+
+    DisplayGraphDiff.prototype._processDiffObject = function (diff) {
+        // recursively get each diff
+        var self = this,
+            client = WebGMEGlobal.Client,
+            path,
+            i,
+            node = self.rootNode;
+
+        for (i in diff) {
+            if (diff.hasOwnProperty(i)) {
+                // todo: skip guid and oGuids for now but use this info for later
+                if (i === "guid" || i === "oGuids") continue;
+                if (i === "attr") {
+                    node.attrChange = true;
+                } else if (i === "reg") {
+                    node.regChange = true;
+                } else {
+                    node.childChange = true;
+                    path = "/" + i;
+                    node = client.getNode(path);
+                    // todo: directly store this data at node
+                    if (!self.nodeDataByPath[path]) {
+                        self.nodeDataByPath[path] = {};
+                    }
+                    self._processDiffObjectRec(diff[i], path, node);
+                }
+                // get node from path
+
+            }
+        }
+
+    };
+
+    DisplayGraphDiff.prototype._processDiffObjectRec = function (diff, path, node) {
+        // recursively get each diff
+        var self = this,
+            client = WebGMEGlobal.Client,
+            i;
+
+        for (i in diff) {
+            if (diff.hasOwnProperty(i)) {
+                // todo: skip guid and oGuids for now but use this info for later
+                if (i === "guid" || i === "oGuids") continue;
+                if (i === "attr") {
+                    self.nodeDataByPath[path].attrChange = true;
+                } else if (i === "reg") {
+                    self.nodeDataByPath[path].regChange = true;
+                } else {
+                    self.nodeDataByPath[path].childChange = true;
+                    node = client.getNode(path + "/" + i);
+                    // todo: directly store this data at node
+                    if (!self.nodeDataByPath[path + "/" + i]) {
+                        self.nodeDataByPath[path + "/" + i] = {};
+                    }
+                    self._processDiffObjectRec(diff[i], path + "/" + i, node);
+                }
+                // get node from path
+            }
+        }
+    };
+
+    DisplayGraphDiff.prototype._modifiyNode = function (node) {
+        var self = this,
+            circleEl,
+            nodeId = node[0].id;
+
+        if (self.nodeDataByPath[nodeId]) {
+            circleEl = node.parent().find('circle');
+            if (self.nodeDataByPath[nodeId].childChange) {
+                circleEl.attr('r', '7');
+                circleEl.css('stroke', 'orange');
+            }
+
+            // todo: if added/deleted takes precedence over attr change; if (self.nodeDataByPath[node])
+
+            if (self.nodeDataByPath[nodeId].attrChange || self.nodeDataByPath[nodeId].regChange) {
+                circleEl.css('fill', 'gold');
+            }
+
+        }
     };
 
     return DisplayGraphDiff;
