@@ -24,6 +24,7 @@ define([
         // Call base class' constructor.
         this.nodeDataByPath = {};
         PluginBase.call(this);
+        this.ignoredKeys = ["guid", "oGuids", "hash", "pointer", "set", "validPlugins", "CrossCuts", "meta", "childrenListChanged"];
     };
 
     // Prototypal inheritance from PluginBase.
@@ -52,7 +53,17 @@ define([
         //var self = this,
             //branchesResponse = $.ajax({url: "api/projects/" + self.projectId.replace("+", "/") + "/branches", async: false}).responseJSON,
             //branches = branchesResponse ? Object.keys(branchesResponse) : [];
-
+        //var panel = WebGMEGlobal.PanelManager.getActivePanel(),
+        //    widget = panel.widget,
+        //    control = panel.control,
+        //    nodeObjs = control._nodes;
+        //
+        //for (var nodeId in nodeObjs) {
+        //
+        //    if (nodeObjs[nodeId] && nodeObjs[nodeId].childrenNum > 0) {
+        //        widget.onNodeOpen(nodeId);
+        //    }
+        //}
         // todo: in the plugin window show a list of available branches
         return [
             {
@@ -106,6 +117,7 @@ define([
             b2 = self.currentConfig.branch2Name,
             url = "/api/projects/" + self.projectId.replace("+", "/") + "/compare/" + b1 + "..." + b2;
 
+
         // get the diff json between selected branch1 and branch2
         var diff = $.ajax({url: url, async: false}).responseJSON;
 
@@ -133,15 +145,13 @@ define([
             if (self.nodeDataByPath.hasOwnProperty(node)) {
                 modifiedNode = graphNodes.find('[id="' + node + '"]');
                 if (modifiedNode) {
-                    self._modifiyNode(modifiedNode);
+                    self._modifyNode(modifiedNode);
                 }
             }
         }
 
+        //nodeObject = self.activeNode;
 
-
-        nodeObject = self.activeNode;
-        //
         //self.core.setAttribute(nodeObject, 'name', 'My new obj');
         //self.core.setRegistry(nodeObject, 'position', {x: 70, y: 70});
 
@@ -161,13 +171,12 @@ define([
         for (i in diff) {
             if (diff.hasOwnProperty(i)) {
                 // todo: skip guid and oGuids for now but use this info for later
-                if (i === "guid" || i === "oGuids") continue;
+                if (self.ignoredKeys.indexOf(i) > -1) continue;
                 if (i === "attr") {
                     node.attrChange = true;
                 } else if (i === "reg") {
                     node.regChange = true;
                 } else {
-                    node.childChange = true;
                     path = "/" + i;
                     node = client.getNode(path);
                     // todo: directly store this data at node
@@ -183,6 +192,7 @@ define([
 
     };
 
+
     DisplayGraphDiff.prototype._processDiffObjectRec = function (diff, path, node) {
         // recursively get each diff
         var self = this,
@@ -192,43 +202,82 @@ define([
         for (i in diff) {
             if (diff.hasOwnProperty(i)) {
                 // todo: skip guid and oGuids for now but use this info for later
-                if (i === "guid" || i === "oGuids") continue;
+                if (self.ignoredKeys.indexOf(i) > -1) continue;
                 if (i === "attr") {
                     self.nodeDataByPath[path].attrChange = true;
+                    if (self.nodeDataByPath[path].parentPath) {
+                        self.nodeDataByPath[self.nodeDataByPath[path].parentPath].childChange = true;
+                    }
                 } else if (i === "reg") {
                     self.nodeDataByPath[path].regChange = true;
-                } else {
-                    self.nodeDataByPath[path].childChange = true;
-                    node = client.getNode(path + "/" + i);
-                    // todo: directly store this data at node
-                    if (!self.nodeDataByPath[path + "/" + i]) {
-                        self.nodeDataByPath[path + "/" + i] = {};
+                    if (self.nodeDataByPath[path].parentPath) {
+                        self.nodeDataByPath[self.nodeDataByPath[path].parentPath].childChange = true;
                     }
-                    self._processDiffObjectRec(diff[i], path + "/" + i, node);
+                } else if (i === "removed") {
+                    self.nodeDataByPath[self.nodeDataByPath[path].parentPath].childMajorChange = true;
+                    if (diff[i]) {
+                        self.nodeDataByPath[path].removed = true;
+                    } else {
+                        self.nodeDataByPath[path].added = true;
+                    }
+                } else {
+                    node = client.getNode(path + "/" + i);
+                    if (node) {
+                        //self._openNode(path);
+                        // todo: directly store this data at node
+                        if (!self.nodeDataByPath[path + "/" + i]) {
+                            self.nodeDataByPath[path + "/" + i] = {};
+                            self.nodeDataByPath[path + "/" + i].parentPath = path;
+                        }
+                        self._processDiffObjectRec(diff[i], path + "/" + i, node);
+                    }
                 }
                 // get node from path
             }
         }
     };
 
-    DisplayGraphDiff.prototype._modifiyNode = function (node) {
+    DisplayGraphDiff.prototype._modifyNode = function (node) {
         var self = this,
             circleEl,
-            nodeId = node[0].id;
+            nodeId = node[0] ? node[0].id : null;
 
         if (self.nodeDataByPath[nodeId]) {
             circleEl = node.parent().find('circle');
-            if (self.nodeDataByPath[nodeId].childChange) {
+            if (self.nodeDataByPath[nodeId].childMajorChange) {
+                circleEl.attr('r', '7');
+                circleEl.css('stroke', 'red');
+
+            } else if (self.nodeDataByPath[nodeId].childChange) {
                 circleEl.attr('r', '7');
                 circleEl.css('stroke', 'orange');
             }
 
             // todo: if added/deleted takes precedence over attr change; if (self.nodeDataByPath[node])
 
+            if (self.nodeDataByPath[nodeId].added && self.nodeDataByPath[nodeId].removed) {
+                circleEl.css('fill', 'purple');
+            }
+            if (self.nodeDataByPath[nodeId].added) {
+                circleEl.css('fill', 'green');
+            } else if (self.nodeDataByPath[nodeId].removed) {
+                circleEl.css('fill', 'red');
+            }
             if (self.nodeDataByPath[nodeId].attrChange || self.nodeDataByPath[nodeId].regChange) {
                 circleEl.css('fill', 'gold');
             }
 
+        }
+    };
+
+    DisplayGraphDiff.prototype._openNode = function (nodeId) {
+        var panel = WebGMEGlobal.PanelManager.getActivePanel(),
+            widget = panel.widget,
+            control = panel.control,
+            nodeObjs = control._nodes;
+
+        if (nodeObjs[nodeId] && nodeObjs[nodeId].childrenNum > 0) {
+            widget.onNodeOpen(nodeId);
         }
     };
 
