@@ -23,6 +23,7 @@ define([
     var DisplayGraphDiff = function () {
         // Call base class' constructor.
         this.nodeDataByPath = {};
+        this.idToBaseNodes = {};
         PluginBase.call(this);
         this.ignoredKeys = ["guid", "oGuids", "hash", "pointer", "set", "validPlugins", "CrossCuts", "meta", "childrenListChanged"];
     };
@@ -139,7 +140,20 @@ define([
 
         var graphNodes = $('g.node'),
             node,
-            modifiedNode;
+            path,
+            basePath,
+            modifiedNode,
+            client = WebGMEGlobal.Client;
+
+        for (path in self.idToBaseNodes) {
+            if (self.idToBaseNodes.hasOwnProperty(path)) {
+                basePath = self.idToBaseNodes[path];
+                while (basePath && !client.getNode(basePath)) {
+                    basePath = self.idToBaseNodes[basePath];
+                }
+                self.nodeDataByPath[basePath] = {added: true};
+            }
+        }
 
         for (node in self.nodeDataByPath) {
             if (self.nodeDataByPath.hasOwnProperty(node)) {
@@ -230,6 +244,12 @@ define([
                             self.nodeDataByPath[path + "/" + i].parentPath = path;
                         }
                         self._processDiffObjectRec(diff[i], path + "/" + i, node);
+                    } else if (diff[i].hasOwnProperty("removed")) {
+                        if (diff[i].pointer) {
+                            if (diff[i].pointer["base"]) {
+                                self.idToBaseNodes[path + "/" + i] = diff[i].pointer["base"];
+                            }
+                        }
                     }
                 }
                 // get node from path
