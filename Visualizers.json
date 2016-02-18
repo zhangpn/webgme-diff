@@ -1,0 +1,9 @@
+[
+  {
+    "id": "GraphDiffViz",
+    "title": "GraphDiffViz",
+    "panel": "panels/GraphDiffViz/GraphDiffVizPanel",
+    "DEBUG_ONLY": false,
+    "default": true
+  }
+]
