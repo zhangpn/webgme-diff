@@ -8,7 +8,13 @@ var config = require('webgme/config/config.default'),
 
 
 // The paths can be loaded from the webgme-setup.json
+config.requirejsPaths = {
+    panels: './src/Panels',
+    widgets: './src/Widgets'
+};
+
 config.plugin.basePaths.push('src/plugins');
+
 
 
 // Visualizer descriptors
