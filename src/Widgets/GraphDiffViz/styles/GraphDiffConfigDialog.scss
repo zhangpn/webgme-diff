@@ -1,0 +1,45 @@
+/*
+ * Copyright (C) 2013 Vanderbilt University, All rights reserved.
+ * 
+ * Author: Peng Zhang
+ */
+.graph-diff-config-dialog {
+
+  .model-header {
+    padding: 10px;
+  }
+
+  .modal-body {
+    padding: 15px;
+  }
+
+  .modal-footer {
+    padding: 10px;
+    margin-top: 5px;
+  }
+
+  .form-group {
+    margin-bottom: 10px;
+
+    .row {
+      margin: 0 0;
+    }
+    .controls {
+      .widget {
+        span {
+          margin-top: 5px;
+          font-size: 14px;
+          line-height: 20px;
+          display: block;
+        }
+
+      }
+    }
+
+    div.desc {
+      //margin-left: 180px;
+      font-size: 0.9em;
+      color: #444;
+    }
+  }
+}
