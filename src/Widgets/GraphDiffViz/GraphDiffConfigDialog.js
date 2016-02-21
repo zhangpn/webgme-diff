@@ -56,7 +56,7 @@ define(['js/Controls/PropertyGrid/PropertyGridWidgetManager',
         this._el = this._dialog.find('.modal-body').first();
 
 
-        var configs = this._getConfigs();
+        var configs = this._getConfigs(branches);
 
         this._generateConfigsSection(configs, this._el);
 
@@ -73,24 +73,24 @@ define(['js/Controls/PropertyGrid/PropertyGridWidgetManager',
         });
     };
 
-    GraphDiffConfigDialog.prototype._getConfigs = function () {
+    GraphDiffConfigDialog.prototype._getConfigs = function (branches) {
         return [
             {
                 name: 'branch1Name',
                 displayName: 'First branch name',
                 description: 'Select the first branch to compare',
-                value: 'master',
+                value: branches.indexOf('master') > -1 ? 'master' : branches[0],
                 valueType: 'string',
-                valueItems: ['master', 'alter'],
+                valueItems: branches,
                 readOnly: false
             },
             {
                 name: 'branch2Name',
                 displayName: 'Second branch name',
                 description: 'Select the second branch to compare',
-                value: 'alter',
+                value: branches[1] || branches[0],
                 valueType: 'string',
-                valueItems: ['master', 'alter'],
+                valueItems: branches,
                 readOnly: false
             }];
     };
