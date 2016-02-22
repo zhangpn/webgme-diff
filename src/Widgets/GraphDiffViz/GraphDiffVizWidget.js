@@ -37,6 +37,7 @@ define(['js/Widgets/GraphViz/GraphVizWidget',
         this._logger.debug('ctor finished');
 
         this.nodeDataByPath = {};
+        this.idToBaseNodes = {};
     };
 
     _.extend(GraphDiffVizWidget.prototype, GraphVizWidget.prototype);
