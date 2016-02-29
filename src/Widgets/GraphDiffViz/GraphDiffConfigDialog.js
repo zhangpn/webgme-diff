@@ -26,11 +26,6 @@ define(['js/Controls/PropertyGrid/PropertyGridWidgetManager',
 
         this._dialog.modal('show');
 
-        this._dialog.on('shown.bs.modal', function () {
-            self._codeMirror.refresh();
-            self._codeMirror.focus();
-        });
-
         this._dialog.on('hidden.bs.modal', function () {
             self._dialog.remove();
             self._dialog.empty();
@@ -45,12 +40,15 @@ define(['js/Controls/PropertyGrid/PropertyGridWidgetManager',
         closeSave = function () {
             self._dialog.modal('hide');
 
+            var branches = self._configureWidget();
+
             if (saveCallBack) {
-                saveCallBack.call(self);
+                saveCallBack(branches);
             }
         };
 
         this._dialog = $(GraphDiffConfigDialogTemplate);
+        this._widgets = {};
 
         //get controls
         this._el = this._dialog.find('.modal-body').first();
@@ -107,6 +105,7 @@ define(['js/Controls/PropertyGrid/PropertyGridWidgetManager',
             descEl = null;
 
             widget = this._propertyGridWidgetManager.getWidgetForProperty(configEntry);
+            this._widgets[configEntry.name] = widget;
 
             el = ENTRY_BASE.clone();
             el.data(ATTRIBUTE_DATA_KEY, configEntry.name);
@@ -129,6 +128,29 @@ define(['js/Controls/PropertyGrid/PropertyGridWidgetManager',
     };
 
 
+    GraphDiffConfigDialog.prototype._configureWidget = function () {
+        var branch1,
+            branch2,
+            currentBranch = WebGMEGlobal.Client.getActiveBranchName();
+
+        if (this._widgets.hasOwnProperty('branch1Name')) {
+            branch1 = this._widgets['branch1Name'].getValue();
+        }
+        if (this._widgets.hasOwnProperty('branch2Name')) {
+            branch2 = this._widgets['branch2Name'].getValue();
+        }
+
+        if (currentBranch !== branch1 && branch1 !== branch2) {
+            WebGMEGlobal.Client.selectBranch(branch1, null, function (err) {
+                if (err) {
+                    self.logger.error(err);
+                }
+            });
+        }
+
+        return [branch1, branch2];
+
+    };
 
 
     return GraphDiffConfigDialog;
