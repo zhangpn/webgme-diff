@@ -20,9 +20,7 @@ define(['js/Widgets/GraphViz/GraphVizWidget',
         OPENING = 'opening',
         CLOSING = 'CLOSING',
         NODE_SIZE = 15,
-        TREE_LEVEL_DISTANCE = 180,
-        IGNORED_KEYS = ["guid", "oGuids", "hash", "pointer", "set", "validPlugins", "CrossCuts", "meta", "childrenListChanged"];
-    
+        TREE_LEVEL_DISTANCE = 180;
 
     GraphDiffVizWidget = function (logger, container) {
 
@@ -34,10 +32,6 @@ define(['js/Widgets/GraphViz/GraphVizWidget',
         this._initZoom();
 
         this._logger.debug('ctor finished');
-
-        this.nodeDataByPath = {};
-        this.idToBaseNodes = {};
-        this.addedNodes = {};
     };
 
     _.extend(GraphDiffVizWidget.prototype, GraphVizWidget.prototype);
@@ -63,8 +57,6 @@ define(['js/Widgets/GraphViz/GraphVizWidget',
         // Compute the new tree layout.
         var nodes = this._tree.nodes(this._root).reverse(),
             links = this._tree.links(nodes);
-
-        self._updateDiffObjs(nodes, links);
 
         var diagonal = d3.svg.diagonal()
             .projection(function (d) {
@@ -142,27 +134,30 @@ define(['js/Widgets/GraphViz/GraphVizWidget',
             //    return d.id;
             //});
 
+        var control = WebGMEGlobal.PanelManager.getActivePanel().control,
+            nodeDataByPath = control.nodeDataByPath;
+
         nodeUpdate.select('circle')
             .attr('r', function (d) {
-                return self.nodeDataByPath[d.id] ? (self.nodeDataByPath[d.id].childMajorChange ? 7 : 4.5) : 4.5;
+                return nodeDataByPath[d.id] ? (nodeDataByPath[d.id].childMajorChange ? 7 : 4.5) : 4.5;
             })
             .style('stroke', function(d) {
-                return self.nodeDataByPath[d.id] ? (self.nodeDataByPath[d.id].childMajorChange
-                                                    ? 'red' : self.nodeDataByPath[d.id].childChange ? 'orange' : 'steelblue')
+                return nodeDataByPath[d.id] ? (nodeDataByPath[d.id].childMajorChange
+                                                    ? 'red' : nodeDataByPath[d.id].childChange ? 'orange' : 'steelblue')
                                                     : 'steelblue';
             });
 
         nodeUpdate.select('circle')
             .style('fill', function (d) {
                 var color;
-                if (self.nodeDataByPath[d.id]) {
-                    if (self.nodeDataByPath[d.id].added && self.nodeDataByPath[d.id].removed) {
+                if (nodeDataByPath[d.id]) {
+                    if (nodeDataByPath[d.id].added && nodeDataByPath[d.id].removed) {
                         color = 'purple';
-                    } else if (self.nodeDataByPath[d.id].added) {
+                    } else if (nodeDataByPath[d.id].added) {
                         color = 'green';
-                    } else if (self.nodeDataByPath[d.id].removed) {
+                    } else if (nodeDataByPath[d.id].removed) {
                         color = 'red';
-                    } else if (self.nodeDataByPath[d.id].attrChange || self.nodeDataByPath[d.id].regChange) {
+                    } else if (nodeDataByPath[d.id].attrChange || nodeDataByPath[d.id].regChange) {
                         color = 'gold';
                     }
                 }
@@ -304,122 +299,6 @@ define(['js/Widgets/GraphViz/GraphVizWidget',
         }
     };
 
-
-    GraphDiffVizWidget.prototype._updateDiffObjs = function (nodes, links) {
-        var branch1 = 'master',
-            branch2 = 'alter',
-            projectId = WebGMEGlobal.Client.getProjectObject().projectId,
-            projectSubUrl = projectId.replace("+", "/"),
-            url = "/api/projects/" + projectSubUrl + "/compare/" + branch1 + "..." + branch2,
-            diffObj = $.ajax({url: url, async: false}).responseJSON;
-
-
-        this._otherBranch = branch2;
-        this._projectSubUrl = projectSubUrl;
-        this._processDiffObject(diffObj, branch2);
-
-    };
-
-    GraphDiffVizWidget.prototype._processDiffObject = function (diff) {
-        // recursively get each diff
-        var self = this,
-            client = WebGMEGlobal.Client,
-            path,
-            i,
-            node = self.rootNode;
-
-        for (i in diff) {
-            if (diff.hasOwnProperty(i)) {
-                // todo: skip guid and oGuids for now but use this info for later
-                if (IGNORED_KEYS.indexOf(i) > -1) continue;
-                if (i === "attr") {
-                    node.attrChange = true;
-                } else if (i === "reg") {
-                    node.regChange = true;
-                } else {
-                    path = "/" + i;
-                    node = client.getNode(path);
-                    // todo: directly store this data at node
-                    if (!self.nodeDataByPath[path]) {
-                        self.nodeDataByPath[path] = {};
-                    }
-                    self._processDiffObjectRec(diff[i], path, node);
-                }
-                // get node from path
-
-            }
-        }
-
-    };
-
-
-    GraphDiffVizWidget.prototype._processDiffObjectRec = function (diff, path, node) {
-        // recursively get each diff
-        var self = this,
-            client = WebGMEGlobal.Client,
-            i;
-
-        for (i in diff) {
-            if (diff.hasOwnProperty(i)) {
-                // todo: skip guid and oGuids for now but use this info for later
-                if (IGNORED_KEYS.indexOf(i) > -1) continue;
-                if (i === "attr") {
-                    self.nodeDataByPath[path].attrChange = true;
-                    if (self.nodeDataByPath[path].parentPath) {
-                        self.nodeDataByPath[self.nodeDataByPath[path].parentPath].childChange = true;
-                    }
-                } else if (i === "reg") {
-                    self.nodeDataByPath[path].regChange = true;
-                    if (self.nodeDataByPath[path].parentPath) {
-                        self.nodeDataByPath[self.nodeDataByPath[path].parentPath].childChange = true;
-                    }
-                } else if (i === "removed") {
-                    //self.nodeDataByPath[self.nodeDataByPath[path].parentPath].childMajorChange = true;
-                    if (diff[i]) {
-                        self.nodeDataByPath[path].removed = true;
-                    } else {
-                        self.nodeDataByPath[path].added = true;
-                    }
-                } else {
-                    node = client.getNode(path + "/" + i);
-                    if (node) {
-                        //self._openNode(path);
-                        // todo: directly store this data at node
-                        if (!self.nodeDataByPath[path + "/" + i]) {
-                            self.nodeDataByPath[path + "/" + i] = {};
-                            self.nodeDataByPath[path + "/" + i].parentPath = path;
-                        }
-                        // if guid and oguid are the only keys of diff obj, skip it
-                        if (Object.keys(diff[i]).length > 2 && diff[i].hasOwnProperty("guid") && diff[i].hasOwnProperty("oGuids")) {
-                            self._processDiffObjectRec(diff[i], path + "/" + i, node);
-                        }
-                    } else {
-                        //node =
-                        //if ()
-                         if (diff[i].pointer && diff[i].pointer["base"]) {
-                             self.idToBaseNodes[path + "/" + i] = diff[i].pointer["base"];
-                         }
-
-                        if (diff[i].hasOwnProperty("removed") && diff[i].removed === false) {
-
-                             // node may be added in the other branch, attempt to retrieve that node
-                             var url = "/api/projects/" + self._projectSubUrl + "/branches/" + self._otherBranch + "/tree" + path + "/" + i,
-                                 node = $.ajax({url: url, async: false}).responseJSON;
-                             //"/api/projects/guest/SysML/branches/master/tree/749768943/391052248"
-                             if (!self.addedNodes.hasOwnProperty(path + "/" + i)) {
-                                 self.addedNodes[path + "/" + i] = {};
-                                 self.addedNodes[path + "/" + i].node = node;
-                                 self.addedNodes[path + "/" + i].parent = path;
-                             }
-                         }
-
-                    }
-
-                }
-                // get node from path
-            }
-        }
-    };
 
 
     return GraphDiffVizWidget;
