@@ -75,10 +75,10 @@ define(['../../../node_modules/webgme/src/client/js/Constants',
                 // todo: suggest for faster performance
 
                 if (branches) {
-                    dialog.show(branches, function (previousConfigs) {
+                    dialog.show(branches, self._previousConfigs, function (previousConfigs) {
                         self._previousConfigs = previousConfigs;
-                        self._otherBranch = branches[1];
-                        self._firstBranch = branches[0];
+                        self._otherBranch = previousConfigs[1];
+                        self._firstBranch = previousConfigs[0];
 
                         self._diffProcessed = false;
                         self._generateData();
@@ -294,18 +294,20 @@ define(['../../../node_modules/webgme/src/client/js/Constants',
                         // if guid and oguid are the only keys of diff obj, skip it
                         if (Object.keys(diff[i]).length > 2 && diff[i].hasOwnProperty("guid") && diff[i].hasOwnProperty("oGuids")) {
                             self._processDiffObjectRec(diff[i], path + "/" + i, node);
+                        } else if (diff[i].removed) {
+                            self.nodeDataByPath[path + "/" + i].removed = true;
                         }
                     } else {
-                        //node =
-                        //if ()
                         if (diff[i].pointer && diff[i].pointer["base"]) {
                             self.idToBaseNodes[path + "/" + i] = diff[i].pointer["base"];
                         }
 
-                        if (diff[i].hasOwnProperty("removed") ) {
+                        if (diff[i].hasOwnProperty("removed")) {
 
-                            if (diff[i].removed === false) {
-
+                            if (!self.nodeDataByPath[path + "/" + i]) {
+                                self.nodeDataByPath[path + "/" + i] = {};
+                            }
+                            if (!diff[i].removed) {
                                 // node may be added in the other branch, attempt to retrieve that node
                                 var url = "/api/projects/" + self._projectSubUrl + "/branches/" + self._otherBranch + "/tree" + path + "/" + i,
                                     n = $.ajax({url: url, async: false}).responseJSON;
@@ -315,13 +317,15 @@ define(['../../../node_modules/webgme/src/client/js/Constants',
                                     self.addedNodes[path + "/" + i].node = n;
                                     self.addedNodes[path + "/" + i].parent = path;
                                 }
-                            } else if (diff[i].removed === true) {
+                            } else {
                                 if (!self.nodeDataByPath[path]) {
                                     self.nodeDataByPath[path] = {};
                                 }
-                                self.nodeDataByPath[path].childMajorChange = true;
+                                self.nodeDataByPath[path + "/" + i].removed = true;
                             }
+                            self.nodeDataByPath[path].childMajorChange = true;
                         }
+
 
                     }
 

@@ -19,10 +19,10 @@ define(['js/Controls/PropertyGrid/PropertyGridWidgetManager',
         this._propertyGridWidgetManager = new PropertyGridWidgetManager();
     };
 
-    GraphDiffConfigDialog.prototype.show = function (branches, saveCallBack) {
+    GraphDiffConfigDialog.prototype.show = function (branches, previousConfigs, saveCallBack) {
         var self = this;
 
-        this._initDialog(branches, saveCallBack);
+        this._initDialog(branches, previousConfigs, saveCallBack);
 
         this._dialog.modal('show');
 
@@ -33,17 +33,17 @@ define(['js/Controls/PropertyGrid/PropertyGridWidgetManager',
         });
     };
 
-    GraphDiffConfigDialog.prototype._initDialog = function (branches, saveCallBack) {
+    GraphDiffConfigDialog.prototype._initDialog = function (branches, previousConfigs, saveCallBack) {
         var self = this,
             closeSave;
 
         closeSave = function () {
             self._dialog.modal('hide');
 
-            var branches = self._configureWidget();
+            var branchesSelected = self._configureWidget();
 
             if (saveCallBack) {
-                saveCallBack(branches);
+                saveCallBack(branchesSelected);
             }
         };
 
@@ -54,7 +54,7 @@ define(['js/Controls/PropertyGrid/PropertyGridWidgetManager',
         this._el = this._dialog.find('.modal-body').first();
 
 
-        var configs = this._getConfigs(branches);
+        var configs = this._getConfigs(branches, previousConfigs);
 
         this._generateConfigsSection(configs, this._el);
 
@@ -71,13 +71,13 @@ define(['js/Controls/PropertyGrid/PropertyGridWidgetManager',
         });
     };
 
-    GraphDiffConfigDialog.prototype._getConfigs = function (branches) {
+    GraphDiffConfigDialog.prototype._getConfigs = function (branches, previousConfigs) {
         return [
             {
                 name: 'branch1Name',
                 displayName: 'First branch name',
                 description: 'Select the first branch to compare',
-                value: branches.indexOf('master') > -1 ? 'master' : branches[0],
+                value: previousConfigs ? previousConfigs[0] : (branches.indexOf('master') > -1 ? 'master' : branches[0]),
                 valueType: 'string',
                 valueItems: branches,
                 readOnly: false
@@ -86,7 +86,7 @@ define(['js/Controls/PropertyGrid/PropertyGridWidgetManager',
                 name: 'branch2Name',
                 displayName: 'Second branch name',
                 description: 'Select the second branch to compare',
-                value: branches[1] || branches[0],
+                value: previousConfigs ? previousConfigs[1] : (branches[1] || branches[0]),
                 valueType: 'string',
                 valueItems: branches,
                 readOnly: false
