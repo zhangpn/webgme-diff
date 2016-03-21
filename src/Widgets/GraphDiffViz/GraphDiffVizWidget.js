@@ -135,7 +135,8 @@ define(['js/Widgets/GraphViz/GraphVizWidget',
             //});
 
         var control = WebGMEGlobal.PanelManager.getActivePanel().control,
-            nodeDataByPath = control.nodeDataByPath;
+            nodeDataByPath = control.nodeDataByPath,
+            removedNodes = control.removedNodes;
 
         nodeUpdate.select('circle')
             .attr('r', function (d) {

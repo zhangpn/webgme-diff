@@ -8,17 +8,19 @@ define(['../../../node_modules/webgme/src/client/js/Constants',
     'js/Utils/GMEConcepts',
     'js/NodePropertyNames',
     'widgets/GraphDiffViz/GraphDiffConfigDialog',
-    'js/Panels/GraphViz/GraphVizPanelControl'
+    'js/Panels/GraphViz/GraphVizPanelControl',
+    'underscore'
 ], function (CONSTANTS,
              GMEConcepts,
              nodePropertyNames,
              GraphDiffConfigDialog,
-             GraphVizPanelControl) {
+             GraphVizPanelControl,
+             underscore) {
 
     'use strict';
 
     var GraphDiffVizControl,
-        IGNORED_KEYS = ["guid", "oGuids", "hash", "pointer", "set", "validPlugins", "CrossCuts", "meta", "childrenListChanged"];
+        IGNORED_KEYS = ["guid", "removed", "oGuids", "hash", "pointer", "set", "validPlugins", "CrossCuts", "meta", "childrenListChanged"];
 
 
     GraphDiffVizControl = function (options) {
@@ -76,12 +78,14 @@ define(['../../../node_modules/webgme/src/client/js/Constants',
 
                 if (branches) {
                     dialog.show(branches, self._previousConfigs, function (previousConfigs) {
-                        self._previousConfigs = previousConfigs;
-                        self._otherBranch = previousConfigs[1];
-                        self._firstBranch = previousConfigs[0];
+                        if (!_.isEqual(previousConfigs, self._previousConfigs)) {
+                            self._previousConfigs = previousConfigs;
+                            self._otherBranch = previousConfigs[1];
+                            self._firstBranch = previousConfigs[0];
 
-                        self._diffProcessed = false;
-                        self._generateData();
+                            self._diffProcessed = false;
+                            self._generateData();
+                        }
                     });
                 }
             }
@@ -124,15 +128,15 @@ define(['../../../node_modules/webgme/src/client/js/Constants',
             }
         }
 
-        if (!this._diffProcessed) {
-            this._getDiffs();
-            this._diffProcessed = true;
-        }
 
 
         loadRecursive(data);
 
 
+        if (!this._diffProcessed) {
+            this._getDiffs();
+            this._diffProcessed = true;
+        }
         if (this.addedNodes) {
             this._updateData(data);
         }
@@ -140,11 +144,20 @@ define(['../../../node_modules/webgme/src/client/js/Constants',
         this._graphVizWidget.setData(data);
     };
 
+    GraphDiffVizControl.prototype._checkBranchSwitching = function () {
+        var branch1 = WebGMEGlobal.Client.getActiveBranchName(),    // make first branch current branch
+            branch2 = this._otherBranch;
+
+        return branch1 && branch2 && branch1 === branch2;
+    };
+
     GraphDiffVizControl.prototype._updateData = function (data) {
         var self = this,
             _findInsertionPoint,
-            _insertChildNode;
+            _insertChildNode,
+            _getInsertionIndex;
 
+        //if (this._checkBranchSwitching()) return;
 
         _insertChildNode = function (nodeToAdd, pNode) {
             if (pNode.childrenIDs.length > 0 && pNode.children.length > 0) {
@@ -157,14 +170,28 @@ define(['../../../node_modules/webgme/src/client/js/Constants',
             pNode.childrenNum = pNode.childrenIDs.length;
         };
 
+        _getInsertionIndex = function (nodes, idToFind) {
+            for (var i = 0; i < nodes.length; i += 1) {
+                if (nodes[i].id === idToFind) {
+                    return i;
+                }
+            }
+            return -1;
+        };
+
         _findInsertionPoint = function (pid, nodeToAdd, pNode) {
 
             if (pid === pNode.id) {
                 _insertChildNode(nodeToAdd, pNode);
                 return true;
-            } else if (pNode.children && pNode.children.length === pNode.childrenIDs.length) {
+            } else if (pNode.children && pNode.children.length && pNode.childrenIDs.length) {
                 if (pNode.childrenIDs.indexOf(pid) > -1) {
-                    var index = pNode.childrenIDs.length - 1 - pNode.childrenIDs.indexOf(pid);
+                    var index = pNode.children.length === pNode.childrenIDs.length ?
+                        pNode.childrenIDs.length - 1 - pNode.childrenIDs.indexOf(pid) :
+                        _getInsertionIndex(pNode.children, pid);
+
+                    if (index === -1) return false;
+
                     _insertChildNode(nodeToAdd, pNode.children[index]);
                     return true;
                 } else {
@@ -188,7 +215,7 @@ define(['../../../node_modules/webgme/src/client/js/Constants',
                         childrenNum: 0,
                         id: n,
                         isConnection: false,
-                        name: "RoomB",  // todo: get name from project
+                        name: self.addedNodes[n].node.atr.name || 'unnamed',  // todo: get name from project
                         parentId: parentId
                     };
                 this.nodeDataByPath[n] = {
@@ -203,7 +230,8 @@ define(['../../../node_modules/webgme/src/client/js/Constants',
         }
     };
 
-    GraphDiffVizControl.prototype._getDiffs = function (nodes, links) {
+    GraphDiffVizControl.prototype._getDiffs = function () {
+        //if (this._checkBranchSwitching()) return;
         var branch1 = this._firstBranch,
             branch2 = this._otherBranch,
             projectId = WebGMEGlobal.Client.getProjectObject().projectId,
@@ -215,6 +243,7 @@ define(['../../../node_modules/webgme/src/client/js/Constants',
         this.nodeDataByPath = {};
         this.idToBaseNodes = {};
         this.addedNodes = {};
+        this.removedNodes = {};
 
 
         this._projectSubUrl = projectSubUrl;
@@ -244,8 +273,12 @@ define(['../../../node_modules/webgme/src/client/js/Constants',
                     // todo: directly store this data at node
                     if (!self.nodeDataByPath[path]) {
                         self.nodeDataByPath[path] = {};
+                        self.nodeDataByPath[path].parentPath = "";
                     }
-                    self._processDiffObjectRec(diff[i], path, node);
+                    self._processAddRemoveNodes(diff, i, "");
+                    if (Object.keys(diff[i]).length > 2 && diff[i].hasOwnProperty("guid") && diff[i].hasOwnProperty("oGuids")) {
+                        self._processDiffObjectRec(diff[i], path, node);
+                    }
                 }
                 // get node from path
 
@@ -263,6 +296,9 @@ define(['../../../node_modules/webgme/src/client/js/Constants',
 
         for (i in diff) {
             if (diff.hasOwnProperty(i)) {
+                if (i === '1779758275') {
+                    console.log();
+                }
                 // todo: skip guid and oGuids for now but use this info for later
                 if (IGNORED_KEYS.indexOf(i) > -1) continue;
                 if (i === "attr") {
@@ -275,64 +311,59 @@ define(['../../../node_modules/webgme/src/client/js/Constants',
                     if (self.nodeDataByPath[path].parentPath) {
                         self.nodeDataByPath[self.nodeDataByPath[path].parentPath].childChange = true;
                     }
-                } else if (i === "removed") {
-                    //self.nodeDataByPath[self.nodeDataByPath[path].parentPath].childMajorChange = true;
-                    if (diff[i]) {
-                        self.nodeDataByPath[path].removed = true;
-                    } else {
-                        self.nodeDataByPath[path].added = true;
-                    }
                 } else {
-                    node = client.getNode(path + "/" + i);
-                    if (node) {
-                        //self._openNode(path);
-                        // todo: directly store this data at node
-                        if (!self.nodeDataByPath[path + "/" + i]) {
-                            self.nodeDataByPath[path + "/" + i] = {};
-                            self.nodeDataByPath[path + "/" + i].parentPath = path;
-                        }
-                        // if guid and oguid are the only keys of diff obj, skip it
-                        if (Object.keys(diff[i]).length > 2 && diff[i].hasOwnProperty("guid") && diff[i].hasOwnProperty("oGuids")) {
-                            self._processDiffObjectRec(diff[i], path + "/" + i, node);
-                        } else if (diff[i].removed) {
-                            self.nodeDataByPath[path + "/" + i].removed = true;
-                        }
-                    } else {
-                        if (diff[i].pointer && diff[i].pointer["base"]) {
-                            self.idToBaseNodes[path + "/" + i] = diff[i].pointer["base"];
-                        }
-
-                        if (diff[i].hasOwnProperty("removed")) {
-
-                            if (!self.nodeDataByPath[path + "/" + i]) {
-                                self.nodeDataByPath[path + "/" + i] = {};
-                            }
-                            if (!diff[i].removed) {
-                                // node may be added in the other branch, attempt to retrieve that node
-                                var url = "/api/projects/" + self._projectSubUrl + "/branches/" + self._otherBranch + "/tree" + path + "/" + i,
-                                    n = $.ajax({url: url, async: false}).responseJSON;
-                                //"/api/projects/guest/SysML/branches/master/tree/749768943/391052248"
-                                if (!self.addedNodes.hasOwnProperty(path + "/" + i)) {
-                                    self.addedNodes[path + "/" + i] = {};
-                                    self.addedNodes[path + "/" + i].node = n;
-                                    self.addedNodes[path + "/" + i].parent = path;
-                                }
-                            } else {
-                                if (!self.nodeDataByPath[path]) {
-                                    self.nodeDataByPath[path] = {};
-                                }
-                                self.nodeDataByPath[path + "/" + i].removed = true;
-                            }
-                            self.nodeDataByPath[path].childMajorChange = true;
-                        }
-
-
+                    // todo: directly store this data at node
+                    if (!self.nodeDataByPath[path + "/" + i]) {
+                        self.nodeDataByPath[path + "/" + i] = {};
+                        self.nodeDataByPath[path + "/" + i].parentPath = path;
                     }
-
+                    self._processAddRemoveNodes(diff, i, path);
+                    node = client.getNode(path + "/" + i);
+                    if (Object.keys(diff[i]).length > 2 && diff[i].hasOwnProperty("guid") && diff[i].hasOwnProperty("oGuids")) {
+                            self._processDiffObjectRec(diff[i], path + "/" + i, node);
+                    }
                 }
-                // get node from path
             }
         }
+    };
+
+    GraphDiffVizControl.prototype._processAddRemoveNodes = function (diff, i, path) {
+        var self = this;
+        if (diff[i].pointer && diff[i].pointer["base"]) {
+            self.idToBaseNodes[path + "/" + i] = diff[i].pointer["base"];
+        }
+
+        if (diff[i].hasOwnProperty("removed")) {
+
+            if (!self.nodeDataByPath[path + "/" + i]) {
+                self.nodeDataByPath[path + "/" + i] = {};
+            }
+            if (!diff[i].removed) {
+                // node may be added in the other branch, attempt to retrieve that node
+                var url = "/api/projects/" + self._projectSubUrl + "/branches/" + self._otherBranch + "/tree" + path + "/" + i,
+                    n = $.ajax({url: url, async: false}).responseJSON;
+                //"/api/projects/guest/SysML/branches/master/tree/749768943/391052248"
+                if (!self.addedNodes.hasOwnProperty(path + "/" + i)) {
+                    self.addedNodes[path + "/" + i] = {};
+                    self.addedNodes[path + "/" + i].node = n;
+                    self.addedNodes[path + "/" + i].parent = path;
+                }
+            } else {
+                if (!self.nodeDataByPath[path]) {
+                    self.nodeDataByPath[path] = {};
+                }
+                self.nodeDataByPath[path + "/" + i].removed = true;
+                self.removedNodes[path + "/" + i] = true;
+            }
+            self._markChildrenRemoved(path + "/" + i);
+            if (path) {
+                self.nodeDataByPath[path].childMajorChange = true;
+            }
+        }
+    };
+
+    GraphDiffVizControl.prototype._markChildrenRemoved = function (parentId) {
+
     };
 
 

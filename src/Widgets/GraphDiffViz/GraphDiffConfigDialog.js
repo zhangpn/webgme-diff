@@ -40,10 +40,27 @@ define(['js/Controls/PropertyGrid/PropertyGridWidgetManager',
         closeSave = function () {
             self._dialog.modal('hide');
 
-            var branchesSelected = self._configureWidget();
+            var branch1,
+                branch2,
+                currentBranch = WebGMEGlobal.Client.getActiveBranchName();
 
-            if (saveCallBack) {
-                saveCallBack(branchesSelected);
+            if (self._widgets.hasOwnProperty('branch1Name')) {
+                branch1 = self._widgets['branch1Name'].getValue();
+            }
+            if (self._widgets.hasOwnProperty('branch2Name')) {
+                branch2 = self._widgets['branch2Name'].getValue();
+            }
+
+            if (currentBranch !== branch1 && branch1 !== branch2) {
+                WebGMEGlobal.Client.selectBranch(branch1, null, function (err) {
+                    if (err) {
+                        self.logger.error(err);
+                    } else if (saveCallBack) {
+                        saveCallBack([branch1, branch2]);
+                    }
+                });
+            } else {
+                saveCallBack([branch1, branch2]);
             }
         };
 
@@ -125,31 +142,6 @@ define(['js/Controls/PropertyGrid/PropertyGridWidgetManager',
 
             containerEl.append(el);
         }
-    };
-
-
-    GraphDiffConfigDialog.prototype._configureWidget = function () {
-        var branch1,
-            branch2,
-            currentBranch = WebGMEGlobal.Client.getActiveBranchName();
-
-        if (this._widgets.hasOwnProperty('branch1Name')) {
-            branch1 = this._widgets['branch1Name'].getValue();
-        }
-        if (this._widgets.hasOwnProperty('branch2Name')) {
-            branch2 = this._widgets['branch2Name'].getValue();
-        }
-
-        if (currentBranch !== branch1 && branch1 !== branch2) {
-            WebGMEGlobal.Client.selectBranch(branch1, null, function (err) {
-                if (err) {
-                    self.logger.error(err);
-                }
-            });
-        }
-
-        return [branch1, branch2];
-
     };
 
 
