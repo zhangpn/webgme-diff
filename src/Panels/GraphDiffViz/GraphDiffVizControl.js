@@ -96,6 +96,101 @@ define(['../../../node_modules/webgme/src/client/js/Constants',
         this._toolbarInitialized = true;
     };
 
+
+    GraphDiffVizControl.prototype._initWidgetEventHandlers = function () {
+        var self = this;
+
+        this._graphVizWidget.onBackgroundDblClick = function () {
+            if (self._currentNodeParentId) {
+                WebGMEGlobal.State.registerActiveObject(self._currentNodeParentId);
+            }
+        };
+
+        this._graphVizWidget.onNodeOpen = function (id) {
+            self._selfPatterns[id] = {children: 1};
+            self._client.updateTerritory(self._territoryId, self._selfPatterns);
+        };
+
+        this._graphVizWidget.onNodeDblClick = function (id) {
+            WebGMEGlobal.State.registerActiveObject(id);
+        };
+
+        this._graphVizWidget.onNodeClose = function (id) {
+            var deleteRecursive,
+                node,
+                childrenIDs,
+                i;
+
+            deleteRecursive = function (nodeId) {
+                if (self._selfPatterns.hasOwnProperty(nodeId)) {
+                    node = self._nodes[nodeId];
+
+                    if (node) {
+                        childrenIDs = node.childrenIDs;
+                        for (i = 0; i < childrenIDs.length; i += 1) {
+                            deleteRecursive(childrenIDs[i]);
+                        }
+                    }
+
+                    delete self._selfPatterns[nodeId];
+                }
+            };
+
+            //call the cleanup recursively
+            deleteRecursive(id);
+
+            if (id === self._currentNodeId) {
+                self._selfPatterns[id] = {children: 0};
+            }
+
+            self._client.updateTerritory(self._territoryId, self._selfPatterns);
+        };
+    };
+
+    GraphDiffVizControl.prototype.selectedObjectChanged = function (nodeId) {
+        var desc = this._getObjectDescriptor(nodeId),
+            self = this;
+
+        this._logger.debug('activeObject nodeId \'' + nodeId + '\'');
+
+        //remove current territory patterns
+        if (this._currentNodeId) {
+            this._client.removeUI(this._territoryId);
+        }
+
+        this._currentNodeId = nodeId;
+        this._currentNodeParentId = undefined;
+
+        this._nodes = {};
+
+        if (this._currentNodeId || this._currentNodeId === CONSTANTS.PROJECT_ROOT_ID) {
+            //put new node's info into territory rules
+            this._selfPatterns = {};
+            this._selfPatterns[nodeId] = {children: 0};
+
+            this._graphVizWidget.setTitle(desc.name.toUpperCase());
+
+            if (desc.parentId || desc.parentId === CONSTANTS.PROJECT_ROOT_ID) {
+                this.$btnModelHierarchyUp.show();
+            } else {
+                this.$btnModelHierarchyUp.hide();
+            }
+
+            this._currentNodeParentId = desc.parentId;
+
+            this._territoryId = this._client.addUI(this, function (events) {
+                self._eventCallback(events);
+            });
+            //update the territory
+            this._client.updateTerritory(this._territoryId, this._selfPatterns);
+
+            setTimeout(function () {
+                self._selfPatterns[nodeId] = {children: 1};
+                self._client.updateTerritory(self._territoryId, self._selfPatterns);
+            }, 1000);
+        }
+    };
+
     GraphDiffVizControl.prototype._getAvailableBranches = function () {
         var branchesResponse = $.ajax({
             url: "api/projects/" + this._client.getProjectObject().projectId.replace("+", "/") + "/branches",
@@ -162,7 +257,11 @@ define(['../../../node_modules/webgme/src/client/js/Constants',
         _insertChildNode = function (nodeToAdd, pNode) {
             if (pNode.childrenIDs.length > 0 && pNode.children.length > 0) {
                 pNode.children.splice(0, 0, nodeToAdd);
+            } else {
+                pNode.children = [];
+                pNode.children.push(nodeToAdd);
             }
+
             if (pNode.childrenIDs.indexOf(nodeToAdd.id) === -1) {
                 pNode.childrenIDs.push(nodeToAdd.id);
             }
@@ -276,8 +375,8 @@ define(['../../../node_modules/webgme/src/client/js/Constants',
                         self.nodeDataByPath[path].parentPath = "";
                     }
                     self._processAddRemoveNodes(diff, i, "");
-                    if (Object.keys(diff[i]).length > 2 && diff[i].hasOwnProperty("guid") && diff[i].hasOwnProperty("oGuids")) {
-                        self._processDiffObjectRec(diff[i], path, node);
+                    if (Object.keys(diff[i]).length > 2) {
+                        self._processDiffObjectRec(diff[i], path);
                     }
                 }
                 // get node from path
@@ -288,10 +387,9 @@ define(['../../../node_modules/webgme/src/client/js/Constants',
     };
 
 
-    GraphDiffVizControl.prototype._processDiffObjectRec = function (diff, path, node) {
+    GraphDiffVizControl.prototype._processDiffObjectRec = function (diff, path) {
         // recursively get each diff
         var self = this,
-            client = WebGMEGlobal.Client,
             i;
 
         for (i in diff) {
@@ -318,9 +416,8 @@ define(['../../../node_modules/webgme/src/client/js/Constants',
                         self.nodeDataByPath[path + "/" + i].parentPath = path;
                     }
                     self._processAddRemoveNodes(diff, i, path);
-                    node = client.getNode(path + "/" + i);
-                    if (Object.keys(diff[i]).length > 2 && diff[i].hasOwnProperty("guid") && diff[i].hasOwnProperty("oGuids")) {
-                            self._processDiffObjectRec(diff[i], path + "/" + i, node);
+                    if (Object.keys(diff[i]).length > 2) {
+                            self._processDiffObjectRec(diff[i], path + "/" + i);
                     }
                 }
             }
@@ -354,8 +451,8 @@ define(['../../../node_modules/webgme/src/client/js/Constants',
                 }
                 self.nodeDataByPath[path + "/" + i].removed = true;
                 self.removedNodes[path + "/" + i] = true;
+                self._markChildrenRemoved(path + "/" + i);
             }
-            self._markChildrenRemoved(path + "/" + i);
             if (path) {
                 self.nodeDataByPath[path].childMajorChange = true;
             }
@@ -363,7 +460,20 @@ define(['../../../node_modules/webgme/src/client/js/Constants',
     };
 
     GraphDiffVizControl.prototype._markChildrenRemoved = function (parentId) {
+        var client = this._client,
+            node = client.getNode(parentId),
+            childrenIds = node ? node.getChildrenIds() : [],
+            i;
 
+        for (i = 0; i < childrenIds.length; i += 1) {
+            if (!this.nodeDataByPath[childrenIds[i]]) {
+                this.nodeDataByPath[childrenIds[i]] = {};
+            }
+            this.nodeDataByPath[childrenIds[i]].removed = true;
+            this.nodeDataByPath[parentId].childMajorChange = true;
+            this.removedNodes[childrenIds[i]] = true;
+            this._markChildrenRemoved(childrenIds[i]);
+        }
     };
 
 
