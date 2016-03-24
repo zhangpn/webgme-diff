@@ -333,7 +333,7 @@ define(['../../../node_modules/webgme/src/client/js/Constants',
                         childrenNum: 0,
                         id: n,
                         isConnection: false,
-                        name: 'unnamed' || self.addedNodes[n].node.atr.name,  // todo: get name from project
+                        name: self.addedNodes[n].node && self.addedNodes[n].node.atr ? self.addedNodes[n].node.atr.name : 'unnamed',  // todo: get name from project
                         parentId: parentId
                     };
                 this.nodeDataByPath[n] = {
