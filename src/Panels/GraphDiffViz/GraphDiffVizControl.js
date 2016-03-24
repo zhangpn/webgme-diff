@@ -333,7 +333,7 @@ define(['../../../node_modules/webgme/src/client/js/Constants',
                         childrenNum: 0,
                         id: n,
                         isConnection: false,
-                        name: self.addedNodes[n].node && self.addedNodes[n].node.atr ? self.addedNodes[n].node.atr.name : 'unnamed',  // todo: get name from project
+                        name: self.addedNodes[n].node && self.addedNodes[n].node.atr ? self.addedNodes[n].node.atr.name || 'unnamed' : 'unnamed',  // todo: get name from project
                         parentId: parentId
                     };
                 this.nodeDataByPath[n] = {
@@ -450,6 +450,7 @@ define(['../../../node_modules/webgme/src/client/js/Constants',
 
             if (!self.nodeDataByPath[path + "/" + i]) {
                 self.nodeDataByPath[path + "/" + i] = {};
+                self.nodeDataByPath[path + "/" + i].parentPath = path;
             }
             if (!diff[i].removed) {
                 // node may be added in the other branch, attempt to retrieve that node
@@ -472,6 +473,12 @@ define(['../../../node_modules/webgme/src/client/js/Constants',
             }
             if (path) {
                 self.nodeDataByPath[path].childMajorChange = true;
+            }
+
+            var parPath = self.nodeDataByPath[path + "/" + i].parentPath;
+            while (parPath && self.nodeDataByPath[parPath]) {
+                self.nodeDataByPath[parPath].decendantChange = true;
+                parPath = self.nodeDataByPath[parPath].parentPath;
             }
         }
     };

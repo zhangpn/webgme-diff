@@ -179,41 +179,45 @@ define(['js/Widgets/GraphViz/GraphVizWidget',
         nodeUpdate.select('circle')
             .style('fill', function (d) {
                 var color;
-                if (nodeDataByPath[d.id]) {
-                    if (nodeDataByPath[d.id].added && nodeDataByPath[d.id].removed) {
-                        color = 'purple';
-                    } else if (nodeDataByPath[d.id].added) {
-                        color = 'green';
-                    } else if (nodeDataByPath[d.id].removed) {
-                        color = 'red';
-                    } else if (nodeDataByPath[d.id].attrChange || nodeDataByPath[d.id].regChange) {
-                        color = 'gold';
-                    }
-                } else {
-                    //
-                    //for (var i in removedNodes) {
-                    //    if (removedNodes.hasOwnProperty(i)) {
-                    //        if ((d.id instanceof String) && d.id.indexOf(i) > -1) {
-                    //            if (!nodeDataByPath[d.id]) {
-                    //                nodeDataByPath[d.id] = {};
-                    //            }
-                    //            nodeDataByPath[d.id].removed = true;
-                    //            removedNodes[d.id] = true;
-                    //            color = 'red';
-                    //        }
-                    //    }
-                    //}
-                    var parentRemoved = nodeDataByPath[d.parentId] ? nodeDataByPath[d.parentId].removed : false;
-                    if (parentRemoved) {
-                        if (!nodeDataByPath[d.id]) {
-                            nodeDataByPath[d.id] = {};
+                if (nodeDataByPath) {
+                    if (nodeDataByPath[d.id]) {
+                        if (nodeDataByPath[d.id].added && nodeDataByPath[d.id].removed) {
+                            color = 'purple';
+                        } else if (nodeDataByPath[d.id].added) {
+                            color = 'green';
+                        } else if (nodeDataByPath[d.id].removed) {
+                            color = 'red';
+                        } else if (nodeDataByPath[d.id].attrChange || nodeDataByPath[d.id].regChange) {
+                            color = 'gold';
+                        } else if (nodeDataByPath[d.id].decendantChange) {
+                            color = 'pink';
                         }
-                        nodeDataByPath[d.id].removed = true;
-                        removedNodes[d.id] = true;
-                        //if (d.childrenNum) {
-                        //    nodeDataByPath[d.id].childrenMajorChange = true;
+                    } else {
+                        //
+                        //for (var i in removedNodes) {
+                        //    if (removedNodes.hasOwnProperty(i)) {
+                        //        if ((d.id instanceof String) && d.id.indexOf(i) > -1) {
+                        //            if (!nodeDataByPath[d.id]) {
+                        //                nodeDataByPath[d.id] = {};
+                        //            }
+                        //            nodeDataByPath[d.id].removed = true;
+                        //            removedNodes[d.id] = true;
+                        //            color = 'red';
+                        //        }
+                        //    }
                         //}
-                        color = 'red';
+                        var parentRemoved = nodeDataByPath[d.parentId] ? nodeDataByPath[d.parentId].removed : false;
+                        if (parentRemoved) {
+                            if (!nodeDataByPath[d.id]) {
+                                nodeDataByPath[d.id] = {};
+                            }
+                            nodeDataByPath[d.id].removed = true;
+                            removedNodes[d.id] = true;
+                            //if (d.childrenNum) {
+                            //    nodeDataByPath[d.id].childrenMajorChange = true;
+                            //}
+                            color = 'red';
+                        }
                     }
                 }
 
@@ -238,10 +242,10 @@ define(['js/Widgets/GraphViz/GraphVizWidget',
 
         nodeUpdate.select('circle')
             .attr('r', function (d) {
-                return nodeDataByPath[d.id] ? (nodeDataByPath[d.id].childMajorChange ? 7 : 4.5) : 4.5;
+                return nodeDataByPath && nodeDataByPath[d.id] ? (nodeDataByPath[d.id].childMajorChange ? 7 : 4.5) : 4.5;
             })
             .style('stroke', function(d) {
-                return nodeDataByPath[d.id] ? (nodeDataByPath[d.id].childMajorChange
+                return nodeDataByPath && nodeDataByPath[d.id] ? (nodeDataByPath[d.id].childMajorChange
                     ? 'red' : nodeDataByPath[d.id].childChange ? 'orange' : 'steelblue')
                     : 'steelblue';
             });
