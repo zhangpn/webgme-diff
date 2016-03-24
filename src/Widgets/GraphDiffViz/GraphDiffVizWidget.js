@@ -76,6 +76,42 @@ define(['js/Widgets/GraphViz/GraphVizWidget',
 
             return status;
         };
+        //
+        //var getOpenStatus = function (d) {
+        //    var status = LEAF;
+        //
+        //    function getParentStatus (parentId) {
+        //        if (parentId) {
+        //            for (var i = 0; i < nodes.length; ++i) {
+        //                if (nodes[i].id === parentId) {
+        //                    if (nodes[i].status === CLOSING || nodes[i].status === CLOSED) {
+        //                        return CLOSED;
+        //                    } else {
+        //                        return getParentStatus(nodes[i].parentId);
+        //                    }
+        //                }
+        //            }
+        //        }
+        //        return status;
+        //    }
+        //
+        //    if (d.childrenNum > 0) {
+        //        status = CLOSED;
+        //
+        //        if (d.children && d.children.length === d.childrenNum) {
+        //            status = OPEN;
+        //        }
+        //        if (d.parentId) {
+        //            status = getParentStatus(d.parentId);
+        //        }
+        //    } else if (d.parentId) {
+        //        status = getParentStatus(d.parentId);
+        //    }
+        //
+        //
+        //
+        //    return status;
+        //};
 
         // Normalize for fixed-depth.
         nodes.forEach(function (d) {
@@ -138,15 +174,7 @@ define(['js/Widgets/GraphViz/GraphVizWidget',
             nodeDataByPath = control.nodeDataByPath,
             removedNodes = control.removedNodes;
 
-        nodeUpdate.select('circle')
-            .attr('r', function (d) {
-                return nodeDataByPath[d.id] ? (nodeDataByPath[d.id].childMajorChange ? 7 : 4.5) : 4.5;
-            })
-            .style('stroke', function(d) {
-                return nodeDataByPath[d.id] ? (nodeDataByPath[d.id].childMajorChange
-                                                    ? 'red' : nodeDataByPath[d.id].childChange ? 'orange' : 'steelblue')
-                                                    : 'steelblue';
-            });
+
 
         nodeUpdate.select('circle')
             .style('fill', function (d) {
@@ -160,6 +188,32 @@ define(['js/Widgets/GraphViz/GraphVizWidget',
                         color = 'red';
                     } else if (nodeDataByPath[d.id].attrChange || nodeDataByPath[d.id].regChange) {
                         color = 'gold';
+                    }
+                } else {
+                    //
+                    //for (var i in removedNodes) {
+                    //    if (removedNodes.hasOwnProperty(i)) {
+                    //        if ((d.id instanceof String) && d.id.indexOf(i) > -1) {
+                    //            if (!nodeDataByPath[d.id]) {
+                    //                nodeDataByPath[d.id] = {};
+                    //            }
+                    //            nodeDataByPath[d.id].removed = true;
+                    //            removedNodes[d.id] = true;
+                    //            color = 'red';
+                    //        }
+                    //    }
+                    //}
+                    var parentRemoved = nodeDataByPath[d.parentId] ? nodeDataByPath[d.parentId].removed : false;
+                    if (parentRemoved) {
+                        if (!nodeDataByPath[d.id]) {
+                            nodeDataByPath[d.id] = {};
+                        }
+                        nodeDataByPath[d.id].removed = true;
+                        removedNodes[d.id] = true;
+                        //if (d.childrenNum) {
+                        //    nodeDataByPath[d.id].childrenMajorChange = true;
+                        //}
+                        color = 'red';
                     }
                 }
 
@@ -180,6 +234,16 @@ define(['js/Widgets/GraphViz/GraphVizWidget',
                 }
 
                 return color;
+            });
+
+        nodeUpdate.select('circle')
+            .attr('r', function (d) {
+                return nodeDataByPath[d.id] ? (nodeDataByPath[d.id].childMajorChange ? 7 : 4.5) : 4.5;
+            })
+            .style('stroke', function(d) {
+                return nodeDataByPath[d.id] ? (nodeDataByPath[d.id].childMajorChange
+                    ? 'red' : nodeDataByPath[d.id].childChange ? 'orange' : 'steelblue')
+                    : 'steelblue';
             });
 
         nodeUpdate.select('text')

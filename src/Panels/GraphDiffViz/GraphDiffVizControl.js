@@ -20,7 +20,8 @@ define(['../../../node_modules/webgme/src/client/js/Constants',
     'use strict';
 
     var GraphDiffVizControl,
-        IGNORED_KEYS = ["guid", "removed", "oGuids", "hash", "pointer", "set", "validPlugins", "CrossCuts", "meta", "childrenListChanged"];
+        IGNORED_KEYS = ["guid", "removed", "oGuids", "hash", "pointer", "set", "validPlugins", "CrossCuts", "meta", "childrenListChanged"],
+        IGNORED_KEYS_IN_ADDED_NODE = ["_id", "pointer", "base", "reg", "atr"];
 
 
     GraphDiffVizControl = function (options) {
@@ -232,7 +233,7 @@ define(['../../../node_modules/webgme/src/client/js/Constants',
             this._getDiffs();
             this._diffProcessed = true;
         }
-        if (this.addedNodes) {
+        if (this.addedNodes || this.removedNodes) {
             this._updateData(data);
         }
 
@@ -255,17 +256,35 @@ define(['../../../node_modules/webgme/src/client/js/Constants',
         //if (this._checkBranchSwitching()) return;
 
         _insertChildNode = function (nodeToAdd, pNode) {
-            if (pNode.childrenIDs.length > 0 && pNode.children.length > 0) {
-                pNode.children.splice(0, 0, nodeToAdd);
-            } else {
-                pNode.children = [];
-                pNode.children.push(nodeToAdd);
-            }
 
             if (pNode.childrenIDs.indexOf(nodeToAdd.id) === -1) {
                 pNode.childrenIDs.push(nodeToAdd.id);
             }
 
+            if (pNode.childrenIDs.length) {
+                if (pNode.children) {
+                    if (pNode.children.length) {
+                        pNode.children.unshift(nodeToAdd);
+                    }
+                } else {
+                    pNode.children = [nodeToAdd];
+                }
+            }
+            //if (pNode.childrenIDs.length > 0) {
+            //    if (!pNode.children) {
+            //        pNode.children = [];
+            //    }
+            //    pNode.children.unshift(nodeToAdd);
+            //}
+            // else if (pNode.childrenNum > 0) {
+            //    pNode.children = [];
+            //    pNode.children.push(nodeToAdd);
+            //}
+
+            //if (pNode.childrenIDs.length > 0)
+
+
+            //pNode.children.unshift(nodeToAdd);
             pNode.childrenNum = pNode.childrenIDs.length;
         };
 
@@ -314,7 +333,7 @@ define(['../../../node_modules/webgme/src/client/js/Constants',
                         childrenNum: 0,
                         id: n,
                         isConnection: false,
-                        name: self.addedNodes[n].node.atr.name || 'unnamed',  // todo: get name from project
+                        name: 'unnamed' || self.addedNodes[n].node.atr.name,  // todo: get name from project
                         parentId: parentId
                     };
                 this.nodeDataByPath[n] = {
@@ -394,9 +413,6 @@ define(['../../../node_modules/webgme/src/client/js/Constants',
 
         for (i in diff) {
             if (diff.hasOwnProperty(i)) {
-                if (i === '1779758275') {
-                    console.log();
-                }
                 // todo: skip guid and oGuids for now but use this info for later
                 if (IGNORED_KEYS.indexOf(i) > -1) continue;
                 if (i === "attr") {
@@ -445,6 +461,7 @@ define(['../../../node_modules/webgme/src/client/js/Constants',
                     self.addedNodes[path + "/" + i].node = n;
                     self.addedNodes[path + "/" + i].parent = path;
                 }
+                self._markChildrenAdded(path + "/" + i, diff[i]);
             } else {
                 if (!self.nodeDataByPath[path]) {
                     self.nodeDataByPath[path] = {};
@@ -455,6 +472,23 @@ define(['../../../node_modules/webgme/src/client/js/Constants',
             }
             if (path) {
                 self.nodeDataByPath[path].childMajorChange = true;
+            }
+        }
+    };
+
+    GraphDiffVizControl.prototype._markChildrenAdded = function (parentId, diff) {
+        var self = this;
+
+        for (var i in diff) {
+            if (diff.hasOwnProperty(i) && IGNORED_KEYS.indexOf(i) === -1) {
+                var url = "/api/projects/" + self._projectSubUrl + "/branches/" + self._otherBranch + "/tree" + parentId + "/" + i,
+                    n = $.ajax({url: url, async: false}).responseJSON;
+
+                self.addedNodes[parentId + '/' + i] = {
+                    node: n,
+                    parent: parentId
+                };
+                self._markChildrenAdded(parentId + '/' + i, diff[i]);
             }
         }
     };
@@ -474,6 +508,7 @@ define(['../../../node_modules/webgme/src/client/js/Constants',
             this.removedNodes[childrenIds[i]] = true;
             this._markChildrenRemoved(childrenIds[i]);
         }
+
     };
 
 
